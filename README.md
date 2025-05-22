@@ -49,6 +49,10 @@ This project optionally uses an external geolocation API (such as OpenStreetMap�
 
 ---
 
+Screenshot:
+Screenshot
+![image](https://github.com/user-attachments/assets/28cd5756-38eb-4643-8c29-8c547f566a97)
+
 ## How to Use Location API
 
 You can fetch the user’s location on the client side using OpenStreetMap Nominatim API or the browser’s Geolocation API:
@@ -69,5 +73,4 @@ navigator.geolocation.getCurrentPosition((position) => {
 });
 
 
-Screenshot
-![image](https://github.com/user-attachments/assets/28cd5756-38eb-4643-8c29-8c547f566a97)
+

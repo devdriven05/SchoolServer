@@ -1,4 +1,4 @@
-import db from '../Database/db.js';
+import db from '../database/db.js';
 import { calculateDistance } from '../utils/distance.js';
 
 export const addSchool = (req, res) => {

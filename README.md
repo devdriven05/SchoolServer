@@ -20,7 +20,7 @@ This project implements a set of Node.js + Express.js APIs backed by MySQL to ma
 - **Method:** `POST`
 - **Payload:**
 
-```json
+-**json
 {
   "name": "Delhi Public School",
   "address": "Banjara Hills, Hyderabad",

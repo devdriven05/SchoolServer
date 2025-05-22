@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geolocation Demo with Nearby Schools</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: #2c3e50;
+        }
+
+        .location-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        #map-link {
+            margin-top: 15px;
+            display: inline-block;
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        #map-link:hover {
+            text-decoration: underline;
+        }
+
+        .schools-list {
+            margin-top: 20px;
+        }
+
+        .school-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .school-name {
+            font-weight: bold;
+        }
+
+        .school-distance {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Web Geolocation Demo</h1>
+    <p id="location-status">Getting your location...</p>
+
+    <div class="location-info">
+        <p id="coords"></p>
+        <p id="location-name"></p>
+        <p id="location-details"></p>
+        <a id="map-link" target="_blank" rel="noopener noreferrer">View on Map</a>
+    </div>
+
+    <div class="schools-list">
+        <h3>Nearby Schools</h3>
+        <div id="schools-loading" class="loading">Loading school data...</div>
+        <div id="schools-container"></div>
+        <div id="schools-error" style="color: red; display: none;"></div>
+    </div>
+    <div style="margin-bottom: 20px;">
+        <a href="/add-school" style="color: #3498db; text-decoration: none;">Add New School</a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const status = document.getElementById('location-status');
+            const coords = document.getElementById('coords');
+            const locationName = document.getElementById('location-name');
+            const locationDetails = document.getElementById('location-details');
+            const mapLink = document.getElementById('map-link');
+            const schoolsContainer = document.getElementById('schools-container');
+            const schoolsLoading = document.getElementById('schools-loading');
+            const schoolsError = document.getElementById('schools-error');
+
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const { latitude, longitude } = position.coords;
+                        status.textContent = 'Location found!';
+                        coords.textContent = `Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                        mapLink.href = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
+                        mapLink.textContent = 'View on OpenStreetMap';
+
+                        try {
+                            // Get location details
+                            const locationResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+                            const locationData = await locationResponse.json();
+
+                            if (locationData.address) {
+                                const address = locationData.address;
+                                let displayName = '';
+
+                                if (address.road) displayName += `${address.road}, `;
+                                if (address.neighbourhood) displayName += `${address.neighbourhood}, `;
+                                if (address.suburb) displayName += `${address.suburb}, `;
+                                if (address.city || address.town || address.village) {
+                                    displayName += `${address.city || address.town || address.village}, `;
+                                }
+                                if (address.state) displayName += `${address.state}, `;
+                                if (address.country) displayName += address.country;
+
+                                locationName.textContent = displayName || 'Location details available';
+
+                                let details = [];
+                                if (address.postcode) details.push(`Postal Code: ${address.postcode}`);
+                                if (address.country_code) details.push(`Country Code: ${address.country_code.toUpperCase()}`);
+
+                                locationDetails.textContent = details.join(' | ') || '';
+                            } else {
+                                locationName.textContent = 'Location name not available';
+                            }
+
+                            // Get nearby schools
+                            try {
+                                const radius = 2000; // 2km radius
+                                const overpassQuery = `
+                                    [out:json];
+                                    (
+                                      node["amenity"="school"](around:${radius},${latitude},${longitude});
+                                      way["amenity"="school"](around:${radius},${latitude},${longitude});
+                                      relation["amenity"="school"](around:${radius},${latitude},${longitude});
+                                    );
+                                    out center;
+                                `;
+
+                                const overpassResponse = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`);
+                                const schoolsData = await overpassResponse.json();
+
+                                schoolsLoading.style.display = 'none';
+
+                                if (schoolsData.elements && schoolsData.elements.length > 0) {
+                                    // Calculate distance for each school and sort by distance
+                                    const schoolsWithDistance = schoolsData.elements.map(school => {
+                                        const schoolLat = school.lat || (school.center && school.center.lat);
+                                        const schoolLon = school.lon || (school.center && school.center.lon);
+
+                                        if (schoolLat && schoolLon) {
+                                            const distance = calculateDistance(latitude, longitude, schoolLat, schoolLon);
+                                            return {
+                                                ...school,
+                                                distance
+                                            };
+                                        }
+                                        return null;
+                                    }).filter(Boolean).sort((a, b) => a.distance - b.distance);
+
+                                    // Display schools
+                                    schoolsWithDistance.forEach(school => {
+                                        const schoolElement = document.createElement('div');
+                                        schoolElement.className = 'school-item';
+
+                                        const name = school.tags?.name || 'Unnamed School';
+                                        const distance = school.distance < 1000
+                                            ? `${Math.round(school.distance)}m away`
+                                            : `${(school.distance / 1000).toFixed(1)}km away`;
+
+                                        schoolElement.innerHTML = `
+                                            <div class="school-name">${name}</div>
+                                            <div class="school-distance">${distance}</div>
+                                        `;
+                                        schoolsContainer.appendChild(schoolElement);
+                                    });
+                                } else {
+                                    schoolsContainer.innerHTML = '<p>No schools found within 2km radius.</p>';
+                                }
+                            } catch (error) {
+                                console.error('Error fetching schools:', error);
+                                schoolsLoading.style.display = 'none';
+                                schoolsError.style.display = 'block';
+                                schoolsError.textContent = 'Could not load school data. Please try again later.';
+                            }
+
+                        } catch (error) {
+                            console.error('Error fetching location details:', error);
+                            locationName.textContent = 'Could not fetch location details';
+                        }
+
+                        // Optional: send to server
+                        fetch('/location', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ latitude, longitude })
+                        });
+                    },
+                    error => {
+                        status.textContent = 'Unable to retrieve location.';
+                        coords.textContent = `Error: ${error.message}`;
+                        console.error(error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                status.textContent = 'Geolocation is not supported in this browser.';
+            }
+        });
+
+        // Helper function to calculate distance between two coordinates in meters
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c;
+        }
+    </script>
+</body>
+
+</html>

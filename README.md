@@ -20,7 +20,7 @@ This project implements a set of Node.js + Express.js APIs backed by MySQL to ma
 - **Method:** `POST`
 - **Payload:**
 
-<pre> ```json { "name": "Delhi Public School", "address": "Banjara Hills, Hyderabad", "latitude": 17.4213, "longitude": 78.4483 } ``` </pre>
+ ```json { "name": "Delhi Public School", "address": "Banjara Hills, Hyderabad", "latitude": 17.4213, "longitude": 78.4483 } ``` 
 
 GET https://schoolserver-ozst.onrender.com/listSchools?latitude=17.3850&longitude=78.4867
 
